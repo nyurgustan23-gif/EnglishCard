@@ -4,33 +4,35 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from dotenv import load_dotenv
 
-load_dotenv()
-db_name = "EnglishCard"
+load_dotenv(encoding="utf8")
 db_user = os.environ.get("DB_USER")
 db_password = os.environ.get("DB_PASSWORD")
 
 
 def create():
-    conn = psycopg2.connect(
+    connection = psycopg2.connect(
         database="postgres", user=db_user, password=db_password
     )
-    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    cur = conn.cursor()
+    connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = connection.cursor()
     try:
-        cur.execute("CREATE DATABASE EnglishCard;")
+        cur.execute("CREATE DATABASE englishcard;")
         print("Успешно создано")
     except psycopg2.errors.DuplicateDatabase:
         print("БД существует")
     finally:
         cur.close()
-        conn.close()
+        connection.close()
 
 
-def get_db_connection(database, user, password):
-    return psycopg2.connect(database=database, user=user, password=password)
+def get_db_connection():
+    return psycopg2.connect(
+        database="englishcard", user=db_user, password=db_password
+    )
 
 
-conn = get_db_connection(db_name, db_user, db_password)
+create()
+conn = get_db_connection()
 
 
 def init_database():
@@ -70,13 +72,18 @@ def init_database():
         cur.execute("""
             CREATE TABLE IF NOT EXISTS learning_stats(
                 id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT REFERENCES users(id),
-                word_id BIGINT NOT NULL,
+                user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+                common_word_id BIGINT 
+                    REFERENCES common_words(id) ON DELETE CASCADE,
+                user_word_id BIGINT 
+                    REFERENCES user_words(id) ON DELETE CASCADE,
                 word_type VARCHAR(50) NOT NULL,
                 correct_answers BIGINT,
                 total_attempts BIGINT ,
                 last_reviewed TIMESTAMP,
-                UNIQUE (user_id, word_id, word_type)
+                UNIQUE NULLS NOT DISTINCT (
+                    user_id, common_word_id, user_word_id, word_type
+                )
                 );
                 """)
         conn.commit()
@@ -174,26 +181,40 @@ def delete_user_word(user_id, word_id):
 
 
 def update_st(user_id, word_id, word_type, is_correct):
+    if word_type == "common":
+        common_word_id = word_id
+        user_word_id = None
+    else:
+        common_word_id = None
+        user_word_id = word_id
+
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO learning_stats(
                 user_id,
-                word_id, 
+                common_word_id, 
+                user_word_id,
                 word_type, 
                 correct_answers, 
                 total_attempts, 
                 last_reviewed
             )
-            VALUES (%s, %s, %s, %s, 1, NOW())
-            ON CONFLICT (user_id, word_id, word_type)
+            VALUES (%s, %s, %s, %s, %s, 1, NOW())
+            ON CONFLICT (user_id, common_word_id, user_word_id, word_type)
             DO UPDATE SET
                 correct_answers = learning_stats.correct_answers + 
                     EXCLUDED.correct_answers,
                 total_attempts = learning_stats.total_attempts + 1,
                 last_reviewed = NOW();
             """,
-            (user_id, word_id, word_type, 1 if is_correct else 0),
+            (
+                user_id,
+                common_word_id,
+                user_word_id,
+                word_type,
+                1 if is_correct else 0,
+            ),
         )
         conn.commit()
 
@@ -210,6 +231,3 @@ def get_st(user_id):
         )
         data = cur.fetchone()
         return data
-
-
-create()

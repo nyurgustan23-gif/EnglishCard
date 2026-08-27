@@ -83,4 +83,3 @@ def generate_options(user_id):
     word_list = get_user_words(user_id)
     rand_w = random.sample(word_list, 4)
     return rand_w
-    

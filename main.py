@@ -4,16 +4,16 @@ import database
 import services
 import ui
 
+
 def main():
     st.set_page_config(
-    page_title="EnglishCard - Изучение английского",
-    page_icon="📚",
-    layout="wide",
-)
-    if 'database' not in st.session_state:
-        database.create()
+        page_title="EnglishCard - Изучение английского",
+        page_icon="📚",
+        layout="wide",
+    )
+    if "database" not in st.session_state:
+        database.init_database()
         st.session_state.database = True
-    database.init_database()
     services.add_common_words()
     st.title("📚 EnglishCard - Изучай английский с удовольствием!")
     ui.render_sidebar()
@@ -40,6 +40,6 @@ def main():
         )
         st.subheader("Войдите чтобы начать.")
 
+
 if __name__ == "__main__":
     main()
-    
